@@ -1,0 +1,347 @@
+
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>Environmental Monitoring Pakistan | Web GIS</title>
+  <meta name="description" content="Environmental monitoring Web GIS for Pakistan using PostgreSQL, PostGIS and Leaflet.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <!-- Header -->
+  <header class="top">
+    <button id="menuBtn" class="btn icon" aria-label="Toggle sidebar">☰</button>
+
+    <div class="brand">
+      <div class="brand-logo">◈</div>
+      <div>
+        <h1>Environmental Monitoring Pakistan</h1>
+        <p>Weather, rainfall, air quality and river monitoring</p>
+      </div>
+    </div>
+
+    <form id="placeForm" class="place" role="search">
+      <label class="sr" for="placeQ">Find a place in Pakistan</label>
+      <input id="placeQ" type="search" placeholder="Search a place in Pakistan..." autocomplete="off">
+      <button class="btn search-btn" type="submit">Go</button>
+    </form>
+
+    <div class="actions">
+      <span id="apiStatus" class="pill" data-s="checking" role="status">
+        <i></i><span>Checking API...</span>
+      </span>
+
+      <button id="refreshBtn" class="btn">⟳ Refresh</button>
+      <button id="themeBtn" class="btn icon" aria-label="Toggle theme">◐</button>
+      <button id="loginBtn" class="btn light">Log in</button>
+
+      <span id="userBox" hidden>
+        <span id="userName"></span>
+        <button id="logoutBtn" class="btn">Log out</button>
+      </span>
+    </div>
+  </header>
+
+  <!-- Dashboard -->
+  <div class="shell">
+    <aside id="side" aria-label="Dashboard controls">
+      <div class="sidebar-heading">
+        <h2>Monitoring Dashboard</h2>
+        <p>Explore environmental stations across Pakistan</p>
+      </div>
+
+      <!-- Sidebar tabs -->
+      <nav class="sidebar-tabs" aria-label="Dashboard sections">
+        <button type="button" class="tab-btn active" data-tab="overview" aria-pressed="true">Overview</button>
+        <button type="button" class="tab-btn" data-tab="stations" aria-pressed="false">Stations</button>
+        <button type="button" class="tab-btn" data-tab="tools" aria-pressed="false">Tools</button>
+      </nav>
+
+      <!-- Overview tab -->
+      <section class="tab-panel active-panel" data-panel="overview">
+        <div class="side-section">
+          <h3>Network Overview</h3>
+
+          <div class="stats">
+            <div>
+              <b id="sTotal">–</b>
+              <span>Total stations</span>
+            </div>
+            <div>
+              <b id="sShown">–</b>
+              <span>Displayed</span>
+            </div>
+            <div>
+              <b id="sObs">–</b>
+              <span>Observations</span>
+            </div>
+          </div>
+
+          <p class="hint">Last updated: <time id="lastUpd">Not yet</time></p>
+          <button id="btnAdd" class="btn primary block">+ Add New Station</button>
+          <p id="authHint" class="hint">Viewing is open to everyone. Log in to add or edit records.</p>
+        </div>
+
+        <details id="detSel" class="card" open>
+          <summary>Selected Station</summary>
+          <div class="body" id="selBody">
+            <p class="empty">Choose a station from the map or station directory to see its details, observations and live conditions.</p>
+          </div>
+        </details>
+      </section>
+
+      <!-- Stations tab -->
+      <section class="tab-panel" data-panel="stations">
+        <div class="side-section">
+          <h3>Search &amp; Filters</h3>
+
+          <label for="q">Station name</label>
+          <input id="q" type="search" placeholder="Search e.g. Islamabad..." autocomplete="off">
+
+          <div class="grid2">
+            <div>
+              <label for="fType">Station type</label>
+              <select id="fType">
+                <option value="">All types</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="fStatus">Status</label>
+              <select id="fStatus">
+                <option value="">Any status</option>
+                <option>Active</option>
+                <option>Maintenance</option>
+                <option>Inactive</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="fProv">Province</label>
+              <select id="fProv">
+                <option value="">All provinces</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="fSource">Data source</label>
+              <select id="fSource">
+                <option value="">Any source</option>
+                <option>Official</option>
+                <option>Student</option>
+                <option>Sample</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="row">
+            <button id="btnReset" class="btn" type="button">Reset filters</button>
+            <button id="btnFit" class="btn" type="button">Zoom to Pakistan</button>
+          </div>
+        </div>
+
+        <div class="side-section station-section">
+          <div class="section-heading">
+            <h3>Station Directory</h3>
+            <span id="listCount" class="badge">0</span>
+          </div>
+
+          <p id="listEmpty" class="empty" hidden>No stations match these filters.</p>
+          <ul id="list" class="list"></ul>
+        </div>
+      </section>
+
+      <!-- Tools tab -->
+      <section class="tab-panel" data-panel="tools">
+        <div class="side-section">
+          <h3>Map Tools</h3>
+          <p class="hint">Change basemaps and station layers using the layer control on the top-right of the map.</p>
+
+          <label class="chk">
+            <input type="checkbox" id="optCluster" checked>
+            Group nearby stations into clusters
+          </label>
+
+          <label class="chk">
+            <input type="checkbox" id="optAuto">
+            Auto-refresh every 60 seconds
+          </label>
+
+          <h3 class="subheading">Data Export</h3>
+          <div class="row">
+            <button id="btnGeo" class="btn" type="button">Export GeoJSON</button>
+            <button id="btnCsv" class="btn" type="button">Export CSV</button>
+          </div>
+
+          <h3 class="subheading">Location</h3>
+          <button id="btnLocate" class="btn block" type="button">Show My Location</button>
+        </div>
+      </section>
+    </aside>
+
+    <div id="backdrop"></div>
+
+    <!-- Map -->
+    <main class="map-wrapper" aria-label="Environmental monitoring map">
+      <div id="map"></div>
+
+      <div class="map-heading">
+        <h2>Pakistan Environmental Monitoring Network</h2>
+        <p>Weather · Rainfall · Air Quality · Rivers</p>
+      </div>
+
+      <div class="map-legend">
+        <button id="legendToggle" class="legend-toggle" type="button" aria-expanded="true">
+          <span>Map Legend</span>
+          <span>▾</span>
+        </button>
+        <div id="legend"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Thin footer -->
+  <footer class="foot">
+    <strong>Environmental Monitoring Pakistan</strong>
+    <span>Developed by <b>@hafsaamjad</b> · © 2026</span>
+  </footer>
+
+  <!-- Messages -->
+  <div id="pickBanner" hidden role="status">
+    Click the map to set station location
+    <button id="pickCancel" class="btn">Cancel</button>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <!-- Login dialog -->
+  <dialog id="dlgLogin">
+    <form id="loginForm">
+      <h2>Log in</h2>
+      <p class="hint">Only authorised users can modify records.</p>
+
+      <label for="lu">Username</label>
+      <input id="lu" name="username" required autocomplete="username">
+
+      <label for="lp">Password</label>
+      <input id="lp" name="password" type="password" required autocomplete="current-password">
+
+      <ul class="err" id="loginErr"></ul>
+
+      <div class="row end">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn primary">Log in</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Station form -->
+  <dialog id="dlgStation">
+    <form id="stForm">
+      <h2 id="stTitle">Add Station</h2>
+
+      <label for="fn">Station name</label>
+      <input id="fn" name="name" required minlength="3" maxlength="100">
+
+      <div class="grid2">
+        <div>
+          <label for="ft">Station type</label>
+          <select id="ft" name="station_type" required></select>
+        </div>
+
+        <div>
+          <label for="fs">Status</label>
+          <select id="fs" name="status">
+            <option>Active</option>
+            <option>Maintenance</option>
+            <option>Inactive</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="fpv">Province</label>
+          <input id="fpv" name="province" list="provList" required maxlength="40">
+        </div>
+
+        <div>
+          <label for="fc">City</label>
+          <input id="fc" name="city" maxlength="60">
+        </div>
+
+        <div>
+          <label for="fe">Elevation (m)</label>
+          <input id="fe" name="elevation_m" type="number" step="1" min="-50" max="9000">
+        </div>
+
+        <div>
+          <label for="fd">Data source</label>
+          <select id="fd" name="data_source">
+            <option>Student</option>
+            <option>Sample</option>
+            <option>Official</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="fla">Latitude</label>
+          <input id="fla" name="lat" type="number" step="any" min="23.5" max="37.2" required>
+        </div>
+
+        <div>
+          <label for="flo">Longitude</label>
+          <input id="flo" name="lon" type="number" step="any" min="60.8" max="77.9" required>
+        </div>
+      </div>
+
+      <datalist id="provList"></datalist>
+
+      <button type="button" class="btn block" id="btnPick">Pick Location on Map</button>
+      <p class="hint">Select coordinates by clicking on the map.</p>
+
+      <ul class="err" id="stErr"></ul>
+
+      <div class="row end">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn primary">Save Station</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Observation form -->
+  <dialog id="dlgObs">
+    <form id="obForm">
+      <h2 id="obTitle">Add Observation</h2>
+      <p class="hint">Enter at least one measurement.</p>
+
+      <label for="orr">Rainfall (mm)</label>
+      <input id="orr" name="rainfall_mm" type="number" step="0.1" min="0" max="1000">
+
+      <label for="ot">Temperature (°C)</label>
+      <input id="ot" name="temperature_c" type="number" step="0.1" min="-50" max="60">
+
+      <label for="op">PM2.5 (µg/m³)</label>
+      <input id="op" name="pm25" type="number" step="0.1" min="0" max="1000">
+
+      <ul class="err" id="obErr"></ul>
+
+      <div class="row end">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button class="btn primary">Save Record</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
